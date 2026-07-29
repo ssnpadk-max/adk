@@ -1,7 +1,7 @@
 --[[
-📜 LUX-ADK SCRIPT V2.6.1 (Owner Auto-Bypass, Admin Abuse System & Single-Use Codes)
+📜 LUX-ADK SCRIPT V2.6.2 (Absolute Owner Bypass Fix)
 🎯 World 2 & World 3 Auto-Farm [FIXED WIN BLOCK TOUCH]
-🔒 Follow Check Required: @ldl_160100 (Auto-Bypassed for Owner)
+🔒 Follow Check Required: @ldl_160100 (Instant Bypass for Owner)
 🛡️ Anti-Kick & Hazard Bypass | WindUI Integrated
 👥 Live Player Counter Included | ⚡ Admin Abuse System Included
 --]]
@@ -38,7 +38,7 @@ local HttpService       = game:GetService("HttpService")
 local player     = Players.LocalPlayer
 local Camera     = workspace.CurrentCamera
 
--- إعدادات السكربت V2.6.1
+-- إعدادات السكربت V2.6.2
 local Cfg = {
     AutoFarmActive  = false,
     SelectedWorld   = "World 3",
@@ -52,7 +52,6 @@ local Cfg = {
     
     AntiAFK         = true,
     
-    -- بيانات الأدمن ابيوز
     AdminEventName  = "حدث الأدمن ابيوز القادم 🔥",
     AdminEventDays  = 3
 }
@@ -74,8 +73,9 @@ local function notify(title, text, duration)
 end
 
 --======================================
--- 3. نظام البريميوم والكودات
+-- 3. نظام البريميوم والقائمة البيضاء
 --======================================
+local TargetUsername = "ldl_160100"
 local codesFileName = "lux_codes_v2.json"
 
 local premiumWhitelist = {
@@ -110,8 +110,21 @@ local function saveCodeData()
     end
 end
 
+-- فحص هل اللاعب هو صاحب الحساب تلقائياً
+local function IsOwnerOrWhitelisted()
+    local pName = player.Name:lower()
+    local target = TargetUsername:lower()
+    if pName == target or player.DisplayName:lower() == target then
+        return true
+    end
+    for name, _ in pairs(premiumWhitelist) do
+        if name:lower() == pName then return true end
+    end
+    return false
+end
+
 local function isPremiumActive()
-    if premiumWhitelist[player.Name] then return true end
+    if IsOwnerOrWhitelisted() then return true end
     if codeData.premiumUntil and os.time() < codeData.premiumUntil then return true end
     return false
 end
@@ -119,13 +132,11 @@ end
 local isPremiumUser = isPremiumActive()
 
 --======================================
--- 4. نظام التحقق بالمتابعة (مع التخطي التلقائي للصاحب)
+-- 4. نظام التحقق بالمتابعة (مع التجاوز المطلق)
 --======================================
-local TargetUsername = "ldl_160100"
-
 local function CheckFollowStatus()
-    -- ⚡ تخطي التثبت فوراً لصاحب الحساب أو القائمة البيضاء
-    if player.Name:lower() == TargetUsername:lower() or premiumWhitelist[player.Name] then
+    -- إذا كنت صاحب الحساب يتخطى فوراً وبدون أي فحص سيرفرات
+    if IsOwnerOrWhitelisted() then
         return true
     end
 
@@ -133,13 +144,19 @@ local function CheckFollowStatus()
     pcall(function()
         local targetId = Players:GetUserIdFromNameAsync(TargetUsername)
         local myId = player.UserId
+        
+        if myId == targetId then
+            isFollowing = true
+            return
+        end
+
         local url = "https://friends.roblox.com/v1/users/" .. myId .. "/followings?limit=100"
         local rawResponse = game:HttpGet(url)
         local response = HttpService:JSONDecode(rawResponse)
         
         if response and response.data then
             for _, user in ipairs(response.data) do
-                if user.id == targetId or user.username == TargetUsername then
+                if user.id == targetId or tostring(user.username):lower() == TargetUsername:lower() then
                     isFollowing = true
                     break
                 end
@@ -150,8 +167,9 @@ local function CheckFollowStatus()
 end
 
 local function RequireFollowSystem()
-    if CheckFollowStatus() then
-        notify("أهلاً بك 👋", "تم التخطي التلقائي لصاحب السكربت @" .. player.Name, 4)
+    -- ⚡ إذا كنت صاحب الحساب تفتح اللوحة مباشرة وتلغى الشاشة تماماً
+    if IsOwnerOrWhitelisted() or CheckFollowStatus() then
+        notify("أهلاً بك يا صاحب السكربت 👋", "تم التخطي المباشر للحساب @" .. player.Name, 4)
         return true
     end
 
@@ -205,8 +223,8 @@ local function RequireFollowSystem()
 
     CheckBtn.MouseButton1Click:Connect(function()
         CheckBtn.Text = "⏳ جاري التحقق..."
-        task.wait(0.8)
-        if CheckFollowStatus() then
+        task.wait(0.5)
+        if IsOwnerOrWhitelisted() or CheckFollowStatus() then
             followPassed = true
             FollowGui:Destroy()
             notify("تم التحقق بنجاح ✅", "أهلاً بك في السكربت V2.6!", 3)
@@ -600,7 +618,7 @@ local function StopWaypointAutoFarm()
 end
 
 --======================================
--- 8. تحميل واجهة WindUI V2.6.1
+-- 8. تحميل واجهة WindUI V2.6.2
 --======================================
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 
@@ -785,10 +803,9 @@ AdminAbuseTab:Button({
     end
 })
 
--- الاستماع لأوامر الشات السريعة للأدمن
 pcall(function()
     player.Chatted:Connect(function(msg)
-        if player.Name:lower() == TargetUsername:lower() then
+        if IsOwnerOrWhitelisted() then
             if msg:sub(1, 10) == "!announce " then
                 local text = msg:sub(11)
                 ShowAdminAnnouncementGUI("إعلان سريع من ADK ⚡", text, 8)
@@ -956,4 +973,4 @@ SettingsTab:Button({
     end
 })
 
-notify("LUX-ADK V2.6.1 Ready ⚡", "أهلاً بك @" .. player.Name .. "! السكربت جاهز ومفعّل لك مباشرة.", 5)
+notify("LUX-ADK V2.6.2 Ready ⚡", "أهلاً بك @" .. player.Name .. "! تم فتح السكربت لك تلقائياً.", 5)
