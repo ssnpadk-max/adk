@@ -1,5 +1,5 @@
 --[[
-📜 LUX-ADK SCRIPT V2.6.3 (Strict Username Protection & Fixed Follow Gate)
+📜 LUX-ADK SCRIPT V2.6.4 (Fixed Follow Proxy & Strict Owner Protection)
 🎯 World 2 & World 3 Auto-Farm
 🔒 Strict Owner Locked to Roblox Username: @ldl_160100
 🛡️ Anti-Kick & Hazard Bypass | WindUI Integrated
@@ -36,7 +36,7 @@ local HttpService       = game:GetService("HttpService")
 local player     = Players.LocalPlayer
 local Camera     = workspace.CurrentCamera
 
--- اليوزر الوحيد والأساسي للمالك والأدمن (بدون DisplayName)
+-- اليوزر الوحيد والأساسي للمالك والأدمن
 local TargetUsername = "ldl_160100"
 
 -- فحص صارم: هل المستخدم الحالي هو صاحب الحساب الحقيقي؟
@@ -110,7 +110,7 @@ local function saveCodeData()
 end
 
 --======================================
--- 4. نظام التحقق بالمتابعة الصارم
+-- 4. نظام التحقق بالمتابعة المطور (Roproxy API)
 --======================================
 local function CheckFollowStatus()
     if IsStrictOwner() then
@@ -129,15 +129,16 @@ local function CheckFollowStatus()
 
         local req = (syn and syn.request) or (http and http.request) or http_request or request
         local responseText = ""
+        local targetUrl = "https://friends.roproxy.com/v1/users/" .. myId .. "/followings?limit=100"
         
         if req then
             local res = req({
-                Url = "https://friends.roblox.com/v1/users/" .. myId .. "/followings?limit=100",
+                Url = targetUrl,
                 Method = "GET"
             })
             responseText = res.Body
         else
-            responseText = game:HttpGet("https://friends.roblox.com/v1/users/" .. myId .. "/followings?limit=100")
+            responseText = game:HttpGet(targetUrl)
         end
         
         local response = HttpService:JSONDecode(responseText)
@@ -606,7 +607,7 @@ local function StopWaypointAutoFarm()
 end
 
 --======================================
--- 8. تحميل واجهة WindUI V2.6.3
+-- 8. تحميل واجهة WindUI
 --======================================
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 
@@ -619,7 +620,6 @@ local Window = WindUI:CreateWindow({
 local FarmTab       = Window:Tab({ Title = "Auto Farm", Icon = "zap" })
 local MoveTab       = Window:Tab({ Title = "Movement", Icon = "plane" })
 
--- 🔒 قسم الأدمن لن ينشأ في القائمة إلا بحساب ldl_160100 الحقيقي فقط!
 local AdminAbuseTab = nil
 if IsStrictOwner() then
     AdminAbuseTab = Window:Tab({ Title = "Admin Abuse ⚡", Icon = "crown" })
@@ -964,9 +964,9 @@ SettingsTab:Button({
         StopWaypointAutoFarm()
         StopFly()
         Window:Destroy()
-        notify("إغلاق", "تم إيقاف السكربت V2.6!")
+        notify("إغلاق", "تم إيقاف السكربت V2.6.4!")
     end
 })
 
-notify("LUX-ADK V2.6.3 Protected ⚡", "أهلاً بك @" .. player.Name .. "!", 5)
+notify("LUX-ADK V2.6.4 Protected ⚡", "أهلاً بك @" .. player.Name .. "!", 5)
 
