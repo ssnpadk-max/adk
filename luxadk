@@ -1,9 +1,8 @@
 --[[
-📜 LUX-ADK SCRIPT V2.6.2 (Absolute Owner Bypass Fix)
-🎯 World 2 & World 3 Auto-Farm [FIXED WIN BLOCK TOUCH]
-🔒 Follow Check Required: @ldl_160100 (Instant Bypass for Owner)
+📜 LUX-ADK SCRIPT V2.6.3 (Strict Username Protection & Fixed Follow Gate)
+🎯 World 2 & World 3 Auto-Farm
+🔒 Strict Owner Locked to Roblox Username: @ldl_160100
 🛡️ Anti-Kick & Hazard Bypass | WindUI Integrated
-👥 Live Player Counter Included | ⚡ Admin Abuse System Included
 --]]
 
 if not game:IsLoaded() then game.Loaded:Wait() end
@@ -32,13 +31,19 @@ local UserInputService  = game:GetService("UserInputService")
 local StarterGui        = game:GetService("StarterGui")
 local RunService        = game:GetService("RunService")
 local VirtualUser       = game:GetService("VirtualUser")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local HttpService       = game:GetService("HttpService")
 
 local player     = Players.LocalPlayer
 local Camera     = workspace.CurrentCamera
 
--- إعدادات السكربت V2.6.2
+-- اليوزر الوحيد والأساسي للمالك والأدمن (بدون DisplayName)
+local TargetUsername = "ldl_160100"
+
+-- فحص صارم: هل المستخدم الحالي هو صاحب الحساب الحقيقي؟
+local function IsStrictOwner()
+    return player.Name:lower() == TargetUsername:lower()
+end
+
 local Cfg = {
     AutoFarmActive  = false,
     SelectedWorld   = "World 3",
@@ -73,15 +78,9 @@ local function notify(title, text, duration)
 end
 
 --======================================
--- 3. نظام البريميوم والقائمة البيضاء
+-- 3. نظام الكودات والبريميوم
 --======================================
-local TargetUsername = "ldl_160100"
 local codesFileName = "lux_codes_v2.json"
-
-local premiumWhitelist = {
-    ["ldl_160100"] = true,
-    ["rayan_58060"] = true,
-}
 
 local validCodes = {
     ["AADKSCRIPT-2026-TOP1"]   = true,
@@ -110,33 +109,11 @@ local function saveCodeData()
     end
 end
 
--- فحص هل اللاعب هو صاحب الحساب تلقائياً
-local function IsOwnerOrWhitelisted()
-    local pName = player.Name:lower()
-    local target = TargetUsername:lower()
-    if pName == target or player.DisplayName:lower() == target then
-        return true
-    end
-    for name, _ in pairs(premiumWhitelist) do
-        if name:lower() == pName then return true end
-    end
-    return false
-end
-
-local function isPremiumActive()
-    if IsOwnerOrWhitelisted() then return true end
-    if codeData.premiumUntil and os.time() < codeData.premiumUntil then return true end
-    return false
-end
-
-local isPremiumUser = isPremiumActive()
-
 --======================================
--- 4. نظام التحقق بالمتابعة (مع التجاوز المطلق)
+-- 4. نظام التحقق بالمتابعة الصارم
 --======================================
 local function CheckFollowStatus()
-    -- إذا كنت صاحب الحساب يتخطى فوراً وبدون أي فحص سيرفرات
-    if IsOwnerOrWhitelisted() then
+    if IsStrictOwner() then
         return true
     end
 
@@ -150,13 +127,23 @@ local function CheckFollowStatus()
             return
         end
 
-        local url = "https://friends.roblox.com/v1/users/" .. myId .. "/followings?limit=100"
-        local rawResponse = game:HttpGet(url)
-        local response = HttpService:JSONDecode(rawResponse)
+        local req = (syn and syn.request) or (http and http.request) or http_request or request
+        local responseText = ""
         
+        if req then
+            local res = req({
+                Url = "https://friends.roblox.com/v1/users/" .. myId .. "/followings?limit=100",
+                Method = "GET"
+            })
+            responseText = res.Body
+        else
+            responseText = game:HttpGet("https://friends.roblox.com/v1/users/" .. myId .. "/followings?limit=100")
+        end
+        
+        local response = HttpService:JSONDecode(responseText)
         if response and response.data then
             for _, user in ipairs(response.data) do
-                if user.id == targetId or tostring(user.username):lower() == TargetUsername:lower() then
+                if tonumber(user.id) == tonumber(targetId) or tostring(user.username):lower() == TargetUsername:lower() then
                     isFollowing = true
                     break
                 end
@@ -167,9 +154,10 @@ local function CheckFollowStatus()
 end
 
 local function RequireFollowSystem()
-    -- ⚡ إذا كنت صاحب الحساب تفتح اللوحة مباشرة وتلغى الشاشة تماماً
-    if IsOwnerOrWhitelisted() or CheckFollowStatus() then
-        notify("أهلاً بك يا صاحب السكربت 👋", "تم التخطي المباشر للحساب @" .. player.Name, 4)
+    if IsStrictOwner() or CheckFollowStatus() then
+        if IsStrictOwner() then
+            notify("أهلاً بك يا صاحب السكربت 👋", "تم التخطي المباشر لحسابك الأصلي @" .. player.Name, 4)
+        end
         return true
     end
 
@@ -224,7 +212,7 @@ local function RequireFollowSystem()
     CheckBtn.MouseButton1Click:Connect(function()
         CheckBtn.Text = "⏳ جاري التحقق..."
         task.wait(0.5)
-        if IsOwnerOrWhitelisted() or CheckFollowStatus() then
+        if CheckFollowStatus() then
             followPassed = true
             FollowGui:Destroy()
             notify("تم التحقق بنجاح ✅", "أهلاً بك في السكربت V2.6!", 3)
@@ -244,7 +232,7 @@ end
 RequireFollowSystem()
 
 --======================================
--- 5. نظام شاشة الإعلانات (Admin Abuse Announcement GUI)
+-- 5. نظام شاشة الإعلانات (Admin Announcement)
 --======================================
 local function ShowAdminAnnouncementGUI(titleText, bodyText, displayDuration)
     displayDuration = tonumber(displayDuration) or 5
@@ -618,7 +606,7 @@ local function StopWaypointAutoFarm()
 end
 
 --======================================
--- 8. تحميل واجهة WindUI V2.6.2
+-- 8. تحميل واجهة WindUI V2.6.3
 --======================================
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 
@@ -630,7 +618,13 @@ local Window = WindUI:CreateWindow({
 
 local FarmTab       = Window:Tab({ Title = "Auto Farm", Icon = "zap" })
 local MoveTab       = Window:Tab({ Title = "Movement", Icon = "plane" })
-local AdminAbuseTab = Window:Tab({ Title = "Admin Abuse ⚡", Icon = "crown" })
+
+-- 🔒 قسم الأدمن لن ينشأ في القائمة إلا بحساب ldl_160100 الحقيقي فقط!
+local AdminAbuseTab = nil
+if IsStrictOwner() then
+    AdminAbuseTab = Window:Tab({ Title = "Admin Abuse ⚡", Icon = "crown" })
+end
+
 local PremiumTab    = Window:Tab({ Title = "VIP Premium", Icon = "star" })
 local CodesTab      = Window:Tab({ Title = "Codes", Icon = "key" })
 local SettingsTab   = Window:Tab({ Title = "Settings", Icon = "settings" })
@@ -725,94 +719,96 @@ FarmTab:Toggle({
 })
 
 --======================================
--- 10. قسم الأدمن ابيوز (Admin Abuse System)
+-- 10. قسم الأدمن ابيوز (محمي ومحصول بـ ldl_160100)
 --======================================
-local announceMsgInput = "مرحباً بكم جميعاً! حدث الأدمن قائم الآن 🔥"
-local announceDuration = 7
+if IsStrictOwner() and AdminAbuseTab then
+    local announceMsgInput = "مرحباً بكم جميعاً! حدث الأدمن قائم الآن 🔥"
+    local announceDuration = 7
 
-AdminAbuseTab:Paragraph({
-    Title = "👑 لوحة الأدمن أبيوز (ADK Control)",
-    Desc = "أهلاً بك @" .. player.Name .. "! من هنا يمكنك إرسال إعلانات شاشة، والتحكم بالعدادات للأحداث."
-})
+    AdminAbuseTab:Paragraph({
+        Title = "👑 لوحة الأدمن أبيوز (ADK Owner Only)",
+        Desc = "أهلاً بك المالك الأصلي @" .. player.Name .. "! هذه اللوحة غير ظاهرة إلا لك."
+    })
 
-AdminAbuseTab:Input({
-    Title = "📢 نص الإعلان المباشر",
-    Placeholder = "اكتب النص الذي سيظهر للجميع...",
-    Default = announceMsgInput,
-    Callback = function(txt)
-        announceMsgInput = txt
-    end
-})
-
-AdminAbuseTab:Dropdown({
-    Title = "⏱️ مدة اختفاء الإعلان (بالثواني)",
-    Values = {"3 ثواني", "5 ثواني", "8 ثواني", "12 ثواني", "20 ثانية"},
-    Value = "7 ثواني",
-    Default = "7 ثواني",
-    Callback = function(opt)
-        local rawVal = type(opt) == "table" and opt[1] or opt
-        local num = tonumber(string.match(tostring(rawVal), "%d+"))
-        if num then announceDuration = num end
-    end
-})
-
-AdminAbuseTab:Button({
-    Title = "🚀 إرسال إعلان شاشة للجميع (Broadcast)",
-    Callback = function()
-        ShowAdminAnnouncementGUI("إعلان الأدمن @" .. player.Name, announceMsgInput, announceDuration)
-        notify("تم الإرسال ⚡", "تم عرض الإعلان على الشاشة بنجاح!", 3)
-    end
-})
-
-local eventNameInput = "حدث الكؤوس المزدوجة 🏆"
-local eventDaysInput = "3"
-
-AdminAbuseTab:Input({
-    Title = "📅 اسم الحدث القادم",
-    Placeholder = "أدخل اسم الحدث...",
-    Default = eventNameInput,
-    Callback = function(txt)
-        eventNameInput = txt
-    end
-})
-
-AdminAbuseTab:Input({
-    Title = "⏳ عدد الأيام المتبقية للحدث",
-    Placeholder = "مثال: 3",
-    Default = eventDaysInput,
-    Callback = function(txt)
-        eventDaysInput = txt
-    end
-})
-
-AdminAbuseTab:Button({
-    Title = "🔄 تحديث عداد الحدث للجميع",
-    Callback = function()
-        Cfg.AdminEventName = eventNameInput
-        Cfg.AdminEventDays = tonumber(eventDaysInput) or 3
-        
-        local newDesc = "🔥 " .. Cfg.AdminEventName .. " | متبقي: " .. tostring(Cfg.AdminEventDays) .. " أيام"
-        if EventCountdownParagraph and EventCountdownParagraph.SetDesc then
-            EventCountdownParagraph:SetDesc(newDesc)
-        elseif EventCountdownParagraph and EventCountdownParagraph.Set then
-            EventCountdownParagraph:Set({ Desc = newDesc })
+    AdminAbuseTab:Input({
+        Title = "📢 نص الإعلان المباشر",
+        Placeholder = "اكتب النص الذي سيظهر للجميع...",
+        Default = announceMsgInput,
+        Callback = function(txt)
+            announceMsgInput = txt
         end
-        
-        ShowAdminAnnouncementGUI("تحديث الحدث 📅", "تم تحديث عداد الحدث: " .. Cfg.AdminEventName .. " (متبقي " .. tostring(Cfg.AdminEventDays) .. " أيام)", 6)
-        notify("تم التحديث ✅", "تم تغيير عداد الحدث بنجاح!")
-    end
-})
+    })
 
-pcall(function()
-    player.Chatted:Connect(function(msg)
-        if IsOwnerOrWhitelisted() then
-            if msg:sub(1, 10) == "!announce " then
-                local text = msg:sub(11)
-                ShowAdminAnnouncementGUI("إعلان سريع من ADK ⚡", text, 8)
+    AdminAbuseTab:Dropdown({
+        Title = "⏱️ مدة اختفاء الإعلان (بالثواني)",
+        Values = {"3 ثواني", "5 ثواني", "8 ثواني", "12 ثواني", "20 ثانية"},
+        Value = "7 ثواني",
+        Default = "7 ثواني",
+        Callback = function(opt)
+            local rawVal = type(opt) == "table" and opt[1] or opt
+            local num = tonumber(string.match(tostring(rawVal), "%d+"))
+            if num then announceDuration = num end
+        end
+    })
+
+    AdminAbuseTab:Button({
+        Title = "🚀 إرسال إعلان شاشة للجميع (Broadcast)",
+        Callback = function()
+            ShowAdminAnnouncementGUI("إعلان المالك @" .. player.Name, announceMsgInput, announceDuration)
+            notify("تم الإرسال ⚡", "تم عرض الإعلان على الشاشة بنجاح!", 3)
+        end
+    })
+
+    local eventNameInput = "حدث الكؤوس المزدوجة 🏆"
+    local eventDaysInput = "3"
+
+    AdminAbuseTab:Input({
+        Title = "📅 اسم الحدث القادم",
+        Placeholder = "أدخل اسم الحدث...",
+        Default = eventNameInput,
+        Callback = function(txt)
+            eventNameInput = txt
+        end
+    })
+
+    AdminAbuseTab:Input({
+        Title = "⏳ عدد الأيام المتبقية للحدث",
+        Placeholder = "مثال: 3",
+        Default = eventDaysInput,
+        Callback = function(txt)
+            eventDaysInput = txt
+        end
+    })
+
+    AdminAbuseTab:Button({
+        Title = "🔄 تحديث عداد الحدث للجميع",
+        Callback = function()
+            Cfg.AdminEventName = eventNameInput
+            Cfg.AdminEventDays = tonumber(eventDaysInput) or 3
+            
+            local newDesc = "🔥 " .. Cfg.AdminEventName .. " | متبقي: " .. tostring(Cfg.AdminEventDays) .. " أيام"
+            if EventCountdownParagraph and EventCountdownParagraph.SetDesc then
+                EventCountdownParagraph:SetDesc(newDesc)
+            elseif EventCountdownParagraph and EventCountdownParagraph.Set then
+                EventCountdownParagraph:Set({ Desc = newDesc })
             end
+            
+            ShowAdminAnnouncementGUI("تحديث الحدث 📅", "تم تحديث عداد الحدث: " .. Cfg.AdminEventName .. " (متبقي " .. tostring(Cfg.AdminEventDays) .. " أيام)", 6)
+            notify("تم التحديث ✅", "تم تغيير عداد الحدث بنجاح!")
         end
+    })
+
+    pcall(function()
+        player.Chatted:Connect(function(msg)
+            if IsStrictOwner() then
+                if msg:sub(1, 10) == "!announce " then
+                    local text = msg:sub(11)
+                    ShowAdminAnnouncementGUI("إعلان سريع من ADK ⚡", text, 8)
+                end
+            end
+        end)
     end)
-end)
+end
 
 --======================================
 -- 11. قسم الحركة والخدمات (Movement Tab)
@@ -958,7 +954,6 @@ CodesTab:Button({
         codeData.premiumUntil = currentExpiry + (7 * 24 * 60 * 60)
         saveCodeData()
 
-        isPremiumUser = true
         notify("مبروك! 🌟", "🎉 تم تفعيل الكود بنجاح وحرقه! حصلت على 7 أيام VIP.", 5)
     end
 })
@@ -973,4 +968,5 @@ SettingsTab:Button({
     end
 })
 
-notify("LUX-ADK V2.6.2 Ready ⚡", "أهلاً بك @" .. player.Name .. "! تم فتح السكربت لك تلقائياً.", 5)
+notify("LUX-ADK V2.6.3 Protected ⚡", "أهلاً بك @" .. player.Name .. "!", 5)
+
