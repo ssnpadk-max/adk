@@ -1,7 +1,7 @@
 --[[
-📜 LUX-ADK SCRIPT V2.6 (Follow Gate, Admin Abuse System, Waypoint Master & Single-Use Codes)
+📜 LUX-ADK SCRIPT V2.6.1 (Owner Auto-Bypass, Admin Abuse System & Single-Use Codes)
 🎯 World 2 & World 3 Auto-Farm [FIXED WIN BLOCK TOUCH]
-🔒 Follow Check Required: @ldl_160100
+🔒 Follow Check Required: @ldl_160100 (Auto-Bypassed for Owner)
 🛡️ Anti-Kick & Hazard Bypass | WindUI Integrated
 👥 Live Player Counter Included | ⚡ Admin Abuse System Included
 --]]
@@ -38,7 +38,7 @@ local HttpService       = game:GetService("HttpService")
 local player     = Players.LocalPlayer
 local Camera     = workspace.CurrentCamera
 
--- إعدادات السكربت V2.6
+-- إعدادات السكربت V2.6.1
 local Cfg = {
     AutoFarmActive  = false,
     SelectedWorld   = "World 3",
@@ -119,11 +119,16 @@ end
 local isPremiumUser = isPremiumActive()
 
 --======================================
--- 4. نظام التحقق بالمتابعة (Roblox Follow Verification)
+-- 4. نظام التحقق بالمتابعة (مع التخطي التلقائي للصاحب)
 --======================================
 local TargetUsername = "ldl_160100"
 
 local function CheckFollowStatus()
+    -- ⚡ تخطي التثبت فوراً لصاحب الحساب أو القائمة البيضاء
+    if player.Name:lower() == TargetUsername:lower() or premiumWhitelist[player.Name] then
+        return true
+    end
+
     local isFollowing = false
     pcall(function()
         local targetId = Players:GetUserIdFromNameAsync(TargetUsername)
@@ -146,7 +151,7 @@ end
 
 local function RequireFollowSystem()
     if CheckFollowStatus() then
-        notify("تم التحقق ✅", "شكراً لمتابعتك @" .. TargetUsername .. "! جاري فتح السكربت...", 4)
+        notify("أهلاً بك 👋", "تم التخطي التلقائي لصاحب السكربت @" .. player.Name, 4)
         return true
     end
 
@@ -236,7 +241,7 @@ local function ShowAdminAnnouncementGUI(titleText, bodyText, displayDuration)
 
     local Banner = Instance.new("Frame", AnnounceGui)
     Banner.Size = UDim2.new(0, 450, 0, 130)
-    Banner.Position = UDim2.new(0.5, -225, 0, -150) -- تبدأ من الأعلى للانزلاق
+    Banner.Position = UDim2.new(0.5, -225, 0, -150)
     Banner.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
     Banner.BorderSizePixel = 0
     Instance.new("UICorner", Banner).CornerRadius = UDim.new(0, 14)
@@ -271,10 +276,7 @@ local function ShowAdminAnnouncementGUI(titleText, bodyText, displayDuration)
     TimerBar.BorderSizePixel = 0
     Instance.new("UICorner", TimerBar).CornerRadius = UDim.new(0, 2)
 
-    -- حركة الظهور والنزول
     Banner:TweenPosition(UDim2.new(0.5, -225, 0, 30), Enum.EasingDirection.Out, Enum.EasingStyle.Back, 0.5, true)
-    
-    -- شريط المؤقت
     TimerBar:TweenSize(UDim2.new(0, 0, 0, 4), Enum.EasingDirection.Out, Enum.EasingStyle.Linear, displayDuration, true)
 
     task.delay(displayDuration, function()
@@ -598,7 +600,7 @@ local function StopWaypointAutoFarm()
 end
 
 --======================================
--- 8. تحميل واجهة WindUI V2.6
+-- 8. تحميل واجهة WindUI V2.6.1
 --======================================
 local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
 
@@ -786,7 +788,7 @@ AdminAbuseTab:Button({
 -- الاستماع لأوامر الشات السريعة للأدمن
 pcall(function()
     player.Chatted:Connect(function(msg)
-        if player.Name == "ldl_160100" then
+        if player.Name:lower() == TargetUsername:lower() then
             if msg:sub(1, 10) == "!announce " then
                 local text = msg:sub(11)
                 ShowAdminAnnouncementGUI("إعلان سريع من ADK ⚡", text, 8)
@@ -954,4 +956,4 @@ SettingsTab:Button({
     end
 })
 
-notify("LUX-ADK V2.6 Ready ⚡", "تم التفعيل بنجاح! قسم الأدمن أبيوز مفعّل لك.", 5)
+notify("LUX-ADK V2.6.1 Ready ⚡", "أهلاً بك @" .. player.Name .. "! السكربت جاهز ومفعّل لك مباشرة.", 5)
