@@ -1,5 +1,5 @@
 --[[
-📜 LUX-ADK SCRIPT V2.6.4 (Fixed Follow Proxy & Strict Owner Protection)
+📜 LUX-ADK SCRIPT V2.6.5 (Multi-Page Follow Check Fix)
 🎯 World 2 & World 3 Auto-Farm
 🔒 Strict Owner Locked to Roblox Username: @ldl_160100
 🛡️ Anti-Kick & Hazard Bypass | WindUI Integrated
@@ -110,7 +110,7 @@ local function saveCodeData()
 end
 
 --======================================
--- 4. نظام التحقق بالمتابعة المطور (Roproxy API)
+-- 4. نظام التحقق بالمتابعة المطور (Multi-Page Cursor)
 --======================================
 local function CheckFollowStatus()
     if IsStrictOwner() then
@@ -128,29 +128,40 @@ local function CheckFollowStatus()
         end
 
         local req = (syn and syn.request) or (http and http.request) or http_request or request
-        local responseText = ""
-        local targetUrl = "https://friends.roproxy.com/v1/users/" .. myId .. "/followings?limit=100"
-        
-        if req then
-            local res = req({
-                Url = targetUrl,
-                Method = "GET"
-            })
-            responseText = res.Body
-        else
-            responseText = game:HttpGet(targetUrl)
-        end
-        
-        local response = HttpService:JSONDecode(responseText)
-        if response and response.data then
-            for _, user in ipairs(response.data) do
-                if tonumber(user.id) == tonumber(targetId) or tostring(user.username):lower() == TargetUsername:lower() then
-                    isFollowing = true
-                    break
-                end
+        local cursor = ""
+        local pageCount = 0
+        local maxPages = 6 -- يفحص حتى 600 متابَع (6 صفحات) لضمان العثور على الحسابات القديمة
+
+        repeat
+            pageCount = pageCount + 1
+            local targetUrl = "https://friends.roproxy.com/v1/users/" .. myId .. "/followings?limit=100"
+            if cursor ~= "" then
+                targetUrl = targetUrl .. "&cursor=" .. cursor
             end
-        end
+
+            local responseText = ""
+            if req then
+                local res = req({ Url = targetUrl, Method = "GET" })
+                responseText = res.Body
+            else
+                responseText = game:HttpGet(targetUrl)
+            end
+
+            local response = HttpService:JSONDecode(responseText)
+            if response and response.data then
+                for _, user in ipairs(response.data) do
+                    if tonumber(user.id) == tonumber(targetId) or tostring(user.username):lower() == TargetUsername:lower() then
+                        isFollowing = true
+                        break
+                    end
+                end
+                cursor = response.nextPageCursor or ""
+            else
+                cursor = ""
+            end
+        until isFollowing or cursor == "" or cursor == nil or pageCount >= maxPages
     end)
+
     return isFollowing
 end
 
@@ -176,7 +187,7 @@ local function RequireFollowSystem()
     local Title = Instance.new("TextLabel", MainFrame)
     Title.Size = UDim2.new(1, 0, 0, 35)
     Title.Position = UDim2.new(0, 0, 0, 10)
-    Title.Text = "🔒 نظام التحقق بالمتابعة - V2.6"
+    Title.Text = "🔒 نظام التحقق بالمتابعة - V2.6.5"
     Title.TextColor3 = Color3.fromRGB(255, 255, 255)
     Title.Font = Enum.Font.GothamBold; Title.TextSize = 14; Title.BackgroundTransparency = 1
 
@@ -211,12 +222,12 @@ local function RequireFollowSystem()
     Instance.new("UICorner", CheckBtn).CornerRadius = UDim.new(0, 6)
 
     CheckBtn.MouseButton1Click:Connect(function()
-        CheckBtn.Text = "⏳ جاري التحقق..."
+        CheckBtn.Text = "⏳ جاري الفحص الشامل..."
         task.wait(0.5)
         if CheckFollowStatus() then
             followPassed = true
             FollowGui:Destroy()
-            notify("تم التحقق بنجاح ✅", "أهلاً بك في السكربت V2.6!", 3)
+            notify("تم التحقق بنجاح ✅", "أهلاً بك في السكربت V2.6.5!", 3)
         else
             CheckBtn.Text = "❌ لم تقم بالمتابعة بعد!"
             CheckBtn.BackgroundColor3 = Color3.fromRGB(180, 40, 40)
@@ -955,7 +966,7 @@ CodesTab:Button({
         saveCodeData()
 
         notify("مبروك! 🌟", "🎉 تم تفعيل الكود بنجاح وحرقه! حصلت على 7 أيام VIP.", 5)
-    end
+    end)
 })
 
 SettingsTab:Button({
@@ -964,9 +975,9 @@ SettingsTab:Button({
         StopWaypointAutoFarm()
         StopFly()
         Window:Destroy()
-        notify("إغلاق", "تم إيقاف السكربت V2.6.4!")
+        notify("إغلاق", "تم إيقاف السكربت V2.6.5!")
     end
 })
 
-notify("LUX-ADK V2.6.4 Protected ⚡", "أهلاً بك @" .. player.Name .. "!", 5)
+notify("LUX-ADK V2.6.5 Multi-Page Fix ⚡", "أهلاً بك @" .. player.Name .. "!", 5)
 
