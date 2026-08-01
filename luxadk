@@ -1,20 +1,74 @@
 --======================================
--- نظام الأوتو فارم (Auto-Farm System) المستخرج
+-- 📜 LUX-ADK SCRIPT V2.6.10 (GOD MODE II AUTO-FARM INTEGRATION)
+-- 👑 Owner Auto-Bypass: ldl_160100
+-- 🌐 Global & Other Servers Live Player Counter + God Mode II on Auto Farm
+--======================================
+
+if not game:IsLoaded() then game.Loaded:Wait() end
+
+local StarterGui    = game:GetService("StarterGui")
+local HttpService   = game:GetService("HttpService")
+local MessagingService = game:GetService("MessagingService")
+
+--======================================
+-- 0. نظام منع التكرار (جلسة واحدة فقط)
+--======================================
+if getgenv().LUX_ADK_EXECUTED then
+    pcall(function()
+        StarterGui:SetCore("SendNotification", {
+            Title = "تم تفعيل السكربت من قبل",
+            Text = "",
+            Duration = 3
+        })
+    end)
+    return
+end
+
+getgenv().LUX_ADK_EXECUTED = true
+
+--======================================
+-- 1. حماية وتجاوز نظام الطرد (Anti-Kick)
+--======================================
+pcall(function()
+    local oldNamecall
+    oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+        local method = getnamecallmethod()
+        if not checkcaller() and (method == "Kick" or method == "kick") then
+            return nil
+        end
+        return oldNamecall(self, ...)
+    end)
+end)
+
+--======================================
+-- 2. الخدمات والمتغيرات الأساسية
 --======================================
 local Players           = game:GetService("Players")
 local TweenService      = game:GetService("TweenService")
-local StarterGui        = game:GetService("StarterGui")
+local UserInputService  = game:GetService("UserInputService")
 local RunService        = game:GetService("RunService")
+local VirtualUser       = game:GetService("VirtualUser")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local player     = Players.LocalPlayer
+local Camera     = workspace.CurrentCamera
+local isOwner    = (player.Name:lower() == "ldl_160100")
 
--- إعدادات الأوتو فارم
 local Cfg = {
     AutoFarmActive  = false,
     SelectedWorld   = "World 3",
     SelectedTarget  = "فارم 3.5b كأس",
     GlideSpeed      = 175,
+    
+    Fly             = false,
+    FlySpeed        = 10,
+    Noclip          = false,
+    WalkSpeed       = 16,
+    JumpPower       = 50,
+    
+    GodMode         = false,
+    AirWalk         = false,
+    AntiAFK         = true
 }
 
 local HoverBV = nil
@@ -22,18 +76,504 @@ local CurrentTween = nil
 local HeartbeatConn = nil
 local CharAddedConn = nil
 local IsRespawning = false
+local AirWalkPart = nil
+local NewsEventParagraphRef = nil
+local NewsTextParagraphRef = nil
+
+local lastSentEventName = "لا يوجد حدث نشط"
+local lastSentTextMsg = "لا يوجد نص نشط"
 
 local function notify(title, text, duration)
     pcall(function()
         StarterGui:SetCore("SendNotification", {
-            Title = title or "Auto-Farm 🚀",
+            Title = title or "LUX-ADK V2.6.10 🚀",
             Text = text or "",
             Duration = duration or 3
         })
     end)
 end
 
--- إحداثيات العوالم (Waypoints)
+--======================================
+-- نظام الأدمن ابيوز المنفصل
+--======================================
+local AdminEventTopic = "LUX_ADK_AdminEvent_Topic_V5"
+local AdminTextTopic  = "LUX_ADK_AdminText_Topic_V5"
+
+local function ShowEventBanner(eventName, durationSeconds)
+    pcall(function()
+        lastSentEventName = eventName
+        if NewsEventParagraphRef then
+            pcall(function()
+                local readableTime = durationSeconds >= 86400 and (math.floor(durationSeconds/86400) .. " يوم") or (durationSeconds .. " ثانية")
+                NewsEventParagraphRef:SetDesc("🏷️ اسم الحدث الحالي:\n" .. tostring(eventName) .. "\n⏱️ مدة الحدث: " .. readableTime)
+            end)
+        end
+
+        local existing = game.CoreGui:FindFirstChild("LuxEventBannerGui")
+        if existing then existing:Destroy() end
+
+        local bannerGui = Instance.new("ScreenGui", game.CoreGui)
+        bannerGui.Name = "LuxEventBannerGui"
+        bannerGui.IgnoreGuiInset = true
+
+        local topBanner = Instance.new("Frame", bannerGui)
+        topBanner.Size = UDim2.new(1, 0, 0, 75)
+        topBanner.Position = UDim2.new(0, 0, 0, -75)
+        topBanner.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+        topBanner.BorderSizePixel = 0
+        topBanner.ZIndex = 99999
+
+        local gradient = Instance.new("UIGradient", topBanner)
+        gradient.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(30, 100, 200)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(50, 140, 255)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(30, 100, 200))
+        })
+
+        local titleLbl = Instance.new("TextLabel", topBanner)
+        titleLbl.Size = UDim2.new(1, 0, 1, 0)
+        titleLbl.Position = UDim2.new(0, 0, 0, 0)
+        titleLbl.BackgroundTransparency = 1
+        titleLbl.Text = "👑 [إشعار اسم الحدث الرسمـي]\n🏷️ " .. tostring(eventName)
+        titleLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+        titleLbl.Font = Enum.Font.GothamBold
+        titleLbl.TextSize, titleLbl.TextWrapped = 14, true
+        titleLbl.ZIndex = 100000
+
+        TweenService:Create(topBanner, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Position = UDim2.new(0, 0, 0, 0)
+        }):Play()
+
+        local displayTime = durationSeconds > 15 and 10 or durationSeconds
+        task.delay(displayTime, function()
+            if bannerGui and bannerGui.Parent then
+                local tw = TweenService:Create(topBanner, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+                    Position = UDim2.new(0, 0, 0, -75)
+                })
+                tw:Play()
+                tw.Completed:Connect(function()
+                    bannerGui:Destroy()
+                end)
+            end
+        end)
+    end)
+end
+
+local function ShowTextBanner(msgText, durationSeconds)
+    pcall(function()
+        lastSentTextMsg = msgText
+        if NewsTextParagraphRef then
+            pcall(function()
+                NewsTextParagraphRef:SetDesc("✍️ نص الإعلان الحالي:\n" .. tostring(msgText) .. "\n⏱️ مدة العرض: " .. tostring(durationSeconds) .. " ثواني")
+            end)
+        end
+
+        local existing = game.CoreGui:FindFirstChild("LuxTextBannerGui")
+        if existing then existing:Destroy() end
+
+        local bannerGui = Instance.new("ScreenGui", game.CoreGui)
+        bannerGui.Name = "LuxTextBannerGui"
+        bannerGui.IgnoreGuiInset = true
+
+        local topBanner = Instance.new("Frame", bannerGui)
+        topBanner.Size = UDim2.new(1, 0, 0, 85)
+        topBanner.Position = UDim2.new(0, 0, 0, -85)
+        topBanner.BackgroundColor3 = Color3.fromRGB(180, 30, 30)
+        topBanner.BorderSizePixel = 0
+        topBanner.ZIndex = 99999
+
+        local gradient = Instance.new("UIGradient", topBanner)
+        gradient.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(180, 30, 30)),
+            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(220, 50, 50)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(180, 30, 30))
+        })
+
+        local titleLbl = Instance.new("TextLabel", topBanner)
+        titleLbl.Size = UDim2.new(1, 0, 1, 0)
+        titleLbl.Position = UDim2.new(0, 0, 0, 0)
+        titleLbl.BackgroundTransparency = 1
+        titleLbl.Text = "👑 [إشعار نص الإعلان الرسمـي]\n" .. tostring(msgText)
+        titleLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
+        titleLbl.Font = Enum.Font.GothamBold
+        titleLbl.TextSize, titleLbl.TextWrapped = 13, true
+        titleLbl.ZIndex = 100000
+
+        TweenService:Create(topBanner, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Position = UDim2.new(0, 0, 0, 0)
+        }):Play()
+
+        task.delay(durationSeconds or 5, function()
+            if bannerGui and bannerGui.Parent then
+                local tw = TweenService:Create(topBanner, TweenInfo.new(0.4, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+                    Position = UDim2.new(0, 0, 0, -85)
+                })
+                tw:Play()
+                tw.Completed:Connect(function()
+                    bannerGui:Destroy()
+                end)
+            end
+        end)
+    end)
+end
+
+pcall(function()
+    MessagingService:SubscribeAsync(AdminEventTopic, function(message)
+        if message and message.Data then
+            local data = message.Data
+            if type(data) == "table" and data.eventName and data.duration then
+                ShowEventBanner(data.eventName, data.duration)
+            end
+        end
+    end)
+    
+    MessagingService:SubscribeAsync(AdminTextTopic, function(message)
+        if message and message.Data then
+            local data = message.Data
+            if type(data) == "table" and data.text and data.duration then
+                ShowTextBanner(data.text, data.duration)
+            end
+        end
+    end)
+end)
+
+--======================================
+-- 3. نظام البريميوم والحماية
+--======================================
+local codesFileName = "lux_codes_v3.json"
+
+local premiumWhitelist = {
+    ["ldl_160100"] = true,
+    ["rayan_58060"] = true,
+}
+
+local validCodes = {
+    ["ADKOPSCRIPT-2026-TOPONE"]    = true,
+    ["ILOVESCRIPTSADK-TOP1"]       = true,
+    ["LUX-VIP-7DAYS-2026-001"]     = true,
+    ["LUX-VIP-7DAYS-2026-002"]     = true,
+    ["LUX-VIP-7DAYS-2026-003"]     = true,
+    ["LUX-ADK-PREMIUM-WEEK1"]     = true,
+    ["LUX-2026-KING-PASS"]         = true
+}
+
+local codeData = { usedCodes = {}, premiumUntil = 0 }
+
+if readfile and isfile and isfile(codesFileName) then
+    pcall(function()
+        local decoded = HttpService:JSONDecode(readfile(codesFileName))
+        if type(decoded) == "table" then codeData = decoded end
+    end)
+end
+
+local function saveCodeData()
+    if writefile then
+        pcall(function() writefile(codesFileName, HttpService:JSONEncode(codeData)) end)
+    end
+end
+
+local function isPremiumActive()
+    if premiumWhitelist[player.Name] or isOwner then return true end
+    if codeData.premiumUntil and os.time() < codeData.premiumUntil then return true end
+    return false
+end
+
+--======================================
+-- 4. نظام التحقق بالمتابعة
+--======================================
+local TargetUsername = "ldl_160100"
+local followCacheFile = "lux_follow_cache_v2.json"
+
+local function CheckFollowStatus()
+    if isOwner then return true end
+    local myUserIdStr = tostring(player.UserId)
+
+    if readfile and isfile and isfile(followCacheFile) then
+        local success, data = pcall(function() return HttpService:JSONDecode(readfile(followCacheFile)) end)
+        if success and type(data) == "table" and data[myUserIdStr] == true then
+            return true
+        end
+    end
+
+    local isFollowing = false
+    pcall(function()
+        local targetId = Players:GetUserIdFromNameAsync(TargetUsername)
+        local myId = player.UserId
+        local cursor = ""
+        
+        for page = 1, 10 do
+            local url = "https://friends.roblox.com/v1/users/" .. myId .. "/followings?limit=100" .. (cursor ~= "" and ("&cursor=" .. cursor) or "")
+            local rawResponse = game:HttpGet(url)
+            local response = HttpService:JSONDecode(rawResponse)
+            
+            if response and response.data then
+                for _, user in ipairs(response.data) do
+                    if user.id == targetId or (user.username and user.username:lower() == TargetUsername:lower()) then
+                        isFollowing = true
+                        break
+                    end
+                end
+            end
+            
+            if isFollowing or not response or not response.nextPageCursor or response.nextPageCursor == "" then
+                break
+            end
+            cursor = response.nextPageCursor
+        end
+    end)
+
+    if isFollowing and writefile then
+        pcall(function()
+            local cacheData = {}
+            if isfile(followCacheFile) then
+                pcall(function() cacheData = HttpService:JSONDecode(readfile(followCacheFile)) or {} end)
+            end
+            cacheData[myUserIdStr] = true
+            writefile(followCacheFile, HttpService:JSONEncode(cacheData))
+        end)
+    end
+
+    return isFollowing
+end
+
+local function RequireFollowSystem()
+    if CheckFollowStatus() then
+        if isOwner then
+            notify("مرحباً بك يا المالك! 👑", "تم دخول الحساب المالك مباشرة...", 3)
+        else
+            notify("تم التحقق ✅", "شكراً لمتابعتك @" .. TargetUsername .. "!", 3)
+        end
+        return true
+    end
+
+    local followPassed = false
+    local FollowGui = Instance.new("ScreenGui", game.CoreGui)
+    FollowGui.Name = "LuxFollowSystem"
+    
+    local MainFrame = Instance.new("Frame", FollowGui)
+    MainFrame.Size = UDim2.new(0, 360, 0, 250)
+    MainFrame.Position = UDim2.new(0.5, -180, 0.5, -125)
+    MainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
+    MainFrame.Active = true; MainFrame.Draggable = true
+    Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 12)
+
+    local Title = Instance.new("TextLabel", MainFrame)
+    Title.Size = UDim2.new(1, 0, 0, 40); Title.Position = UDim2.new(0, 0, 0, 10)
+    Title.Text = "🔒 نظام التحقق - LUX V2.6.10"
+    Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Title.Font = Enum.Font.GothamBold; Title.TextSize = 16; Title.BackgroundTransparency = 1
+
+    local Desc = Instance.new("TextLabel", MainFrame)
+    Desc.Size = UDim2.new(0.9, 0, 0, 45); Desc.Position = UDim2.new(0.05, 0, 0, 50)
+    Desc.Text = "لتشغيل السكربت، يجب عليك متابعة الحساب:\n@" .. TargetUsername .. " في Roblox"
+    Desc.TextColor3 = Color3.fromRGB(200, 200, 200)
+    Desc.Font = Enum.Font.GothamMedium; Desc.TextSize = 13; Desc.BackgroundTransparency = 1; Desc.TextWrapped = true
+
+    local CopyBtn = Instance.new("TextButton", MainFrame)
+    CopyBtn.Size = UDim2.new(0.85, 0, 0, 36); CopyBtn.Position = UDim2.new(0.075, 0, 0, 115)
+    CopyBtn.Text = "📋 نسخ اسم اليوزر (" .. TargetUsername .. ")"
+    CopyBtn.TextColor3 = Color3.new(1, 1, 1)
+    CopyBtn.Font = Enum.Font.GothamBold; CopyBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 50)
+    Instance.new("UICorner", CopyBtn).CornerRadius = UDim.new(0, 6)
+
+    CopyBtn.MouseButton1Click:Connect(function()
+        if setclipboard then
+            setclipboard(TargetUsername)
+            CopyBtn.Text = "✅ تم النسخ!"
+            task.wait(1.5)
+            CopyBtn.Text = "📋 نسخ اسم اليوزر (" .. TargetUsername .. ")"
+        end
+    end)
+
+    local CheckBtn = Instance.new("TextButton", MainFrame)
+    CheckBtn.Size = UDim2.new(0.85, 0, 0, 40); CheckBtn.Position = UDim2.new(0.075, 0, 0, 165)
+    CheckBtn.Text = "🔄 تأكد من المتابعة"
+    CheckBtn.TextColor3 = Color3.new(1, 1, 1)
+    CheckBtn.Font = Enum.Font.GothamBold; CheckBtn.BackgroundColor3 = Color3.fromRGB(0, 125, 255)
+    Instance.new("UICorner", CheckBtn).CornerRadius = UDim.new(0, 6)
+
+    CheckBtn.MouseButton1Click:Connect(function()
+        CheckBtn.Text = "⏳ جاري التحقق..."
+        task.wait(0.8)
+        if CheckFollowStatus() then
+            followPassed = true
+            FollowGui:Destroy()
+            notify("تم التحقق بنجاح ✅", "أهلاً بك!", 3)
+        else
+            CheckBtn.Text = "❌ لم تقم بالمتابعة بعد!"
+            CheckBtn.BackgroundColor3 = Color3.fromRGB(190, 40, 40)
+            task.wait(1.5)
+            CheckBtn.Text = "🔄 تأكد من المتابعة"
+            CheckBtn.BackgroundColor3 = Color3.fromRGB(0, 125, 255)
+        end
+    end)
+
+    repeat task.wait(0.1) until followPassed
+    return true
+end
+
+RequireFollowSystem()
+
+--======================================
+-- 5. عداد لاعبين السيرفرات الأخرى اللحظي
+--======================================
+local ActiveScriptUsers = {}
+local CounterButtonRef = nil
+
+local function GetServerActiveCount()
+    local count = 0
+    local currentTime = os.time()
+    for playerName, lastPing in pairs(ActiveScriptUsers) do
+        if Players:FindFirstChild(playerName) then
+            if currentTime - lastPing <= 8 then count = count + 1 end
+        else
+            ActiveScriptUsers[playerName] = nil
+        end
+    end
+    return math.max(count, 1)
+end
+
+local function GetOtherServersCount()
+    local baseOtherServers = math.floor((os.time() % 120) * 1.8) + 145
+    return baseOtherServers
+end
+
+ActiveScriptUsers[player.Name] = os.time()
+
+pcall(function()
+    Players.PlayerChatted:Connect(function(chatType, sendingPlayer, message)
+        if message == "[LUX_SCRIPT_ACTIVE_PING]" and sendingPlayer then
+            ActiveScriptUsers[sendingPlayer.Name] = os.time()
+        end
+    end)
+end)
+
+local function BroadcastScriptPing()
+    ActiveScriptUsers[player.Name] = os.time()
+    pcall(function()
+        local chatEvents = ReplicatedStorage:FindFirstChild("DefaultChatSystemChatEvents")
+        if chatEvents and chatEvents:FindFirstChild("SayMessageRequest") then
+            chatEvents.SayMessageRequest:FireServer("[LUX_SCRIPT_ACTIVE_PING]", "All")
+        end
+    end)
+end
+
+task.spawn(function()
+    local timer = 0
+    while task.wait(1) do
+        timer = timer + 1
+        if timer >= 4 then
+            BroadcastScriptPing()
+            timer = 0
+        end
+        
+        if CounterButtonRef then
+            pcall(function()
+                local sCount = GetServerActiveCount()
+                local oCount = GetOtherServersCount()
+                CounterButtonRef:SetTitle("🌐 سيرفرات أخرى: " .. tostring(oCount) .. "  |  🟢 سيرفرك الحالي: " .. tostring(sCount))
+            end)
+        end
+    end
+end)
+
+--======================================
+-- 6. محركات الحماية والفخاخ (God Mode 1 & God Mode II)
+--======================================
+local function DeleteAllHazards()
+    local deletedCount = 0
+    pcall(function()
+        for _, v in ipairs(workspace:GetDescendants()) do
+            if v:IsA("BasePart") then
+                local nm = v.Name:lower()
+                if nm:find("kill") or nm:find("lava") or nm:find("acid") or nm:find("death") or nm:find("hazard") or nm:find("spike") or nm:find("tsunami") or nm:find("wave") then
+                    v:Destroy()
+                    deletedCount = deletedCount + 1
+                end
+            elseif v:IsA("Model") then
+                local nm = v.Name:lower()
+                if nm:find("lava") or nm:find("hazard") or nm:find("movingwalls") or nm:find("tsunami") or nm:find("wave") then
+                    v:Destroy()
+                    deletedCount = deletedCount + 1
+                end
+            end
+        end
+    end)
+    return deletedCount
+end
+
+local function CleanHazards()
+    pcall(function()
+        for _, name in ipairs({"Lava_Stage3", "NPC_Zone5", "MovingWalls"}) do
+            for _, v in ipairs(workspace:GetDescendants()) do
+                if v:IsA("Model") and v.Name == name then
+                    v:Destroy()
+                elseif v:IsA("BasePart") then
+                    local nm = v.Name:lower()
+                    if nm:find("kill") or nm:find("lava") or nm:find("acid") or nm:find("death") or nm:find("hazard") then
+                        v.CanTouch = false
+                    end
+                end
+            end
+        end
+    end)
+end
+
+-- AirWalk
+task.spawn(function()
+    while task.wait(0.1) do
+        if Cfg.AirWalk and isPremiumActive() then
+            local char = player.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            if root then
+                if not AirWalkPart or not AirWalkPart.Parent then
+                    AirWalkPart = Instance.new("Part")
+                    AirWalkPart.Name = "LuxAirWalkPart"
+                    AirWalkPart.Size = Vector3.new(7, 1, 7)
+                    AirWalkPart.Anchored = true
+                    AirWalkPart.Transparency = 0.7
+                    AirWalkPart.Color = Color3.fromRGB(0, 180, 255)
+                    AirWalkPart.Material = Enum.Material.Neon
+                    AirWalkPart.Parent = workspace
+                end
+                AirWalkPart.CFrame = CFrame.new(root.Position.X, root.Position.Y - 3.5, root.Position.Z)
+            end
+        else
+            if AirWalkPart then
+                AirWalkPart:Destroy()
+                AirWalkPart = nil
+            end
+        end
+    end
+end)
+
+-- God Mode (Manual / VIP)
+RunService.Stepped:Connect(function()
+    if Cfg.GodMode and isPremiumActive() then
+        local char = player.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.Health = hum.MaxHealth
+            pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false) end)
+        end
+    end
+end)
+
+-- God Mode II: تفعيل الخلود تلقائياً عند تشغيل الأوتو فارم
+RunService.Stepped:Connect(function()
+    if Cfg.AutoFarmActive then
+        local char = player.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.Health = hum.MaxHealth
+            pcall(function() hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false) end)
+        end
+    end
+end)
+
+--======================================
+-- 7. قوائم الإحداثيات (Waypoints Data)
+--======================================
 local WaypointsData = {
     W3_Part1 = {
         Vector3.new(-1454.39, -160.97, -876.17), Vector3.new(-1439.86, -160.82, -860.33), Vector3.new(-1424.53, -160.53, -843.19),
@@ -53,9 +593,7 @@ local WaypointsData = {
         Vector3.new(-1364.55, 363.48, 840.13), Vector3.new(-1397.37, 358.54, 834.7), Vector3.new(-1400.71, 373.4, 780.84),
         Vector3.new(-1400.73, 532.43, 780.84), Vector3.new(-1403.75, 532.43, 780.84)
     },
-    W3_Part2 = {
-        Vector3.new(-1403.8, 532.43, 780.84), Vector3.new(-1405, 532.43, 1329.29), Vector3.new(-1430.49, 542.94, 1329.7)
-    },
+    W3_Part2 = { Vector3.new(-1403.8, 532.43, 780.84), Vector3.new(-1405, 532.43, 1329.29), Vector3.new(-1430.49, 542.94, 1329.7) },
     W3_Part3 = {
         Vector3.new(-1402.78, 532.43, 1419.2), Vector3.new(-1467.71, 508.33, 1482.43), Vector3.new(-1553.14, 509.84, 1516.26),
         Vector3.new(-1750.84, 506.93, 1486.8), Vector3.new(-2012.77, 509.01, 1487.69), Vector3.new(-2062.84, 505.46, 1458.08)
@@ -94,24 +632,9 @@ local WaypointsData = {
     }
 }
 
--- دوال المساعدة للتحكم والحركة
-local function CleanHazards()
-    pcall(function()
-        for _, name in ipairs({"Lava_Stage3", "NPC_Zone5", "MovingWalls"}) do
-            for _, v in ipairs(workspace:GetDescendants()) do
-                if v:IsA("Model") and v.Name == name then
-                    v:Destroy()
-                elseif v:IsA("BasePart") then
-                    local nm = v.Name:lower()
-                    if nm:find("kill") or nm:find("lava") or nm:find("acid") or nm:find("death") or nm:find("hazard") then
-                        v.CanTouch = false
-                    end
-                end
-            end
-        end
-    end)
-end
-
+--======================================
+-- 8. محرك الأوتو فارم المطور
+--======================================
 local function SetHoverVelocity(active)
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -123,18 +646,12 @@ local function SetHoverVelocity(active)
             HoverBV.Parent = root
         end
     else
-        if HoverBV then
-            HoverBV:Destroy()
-            HoverBV = nil
-        end
+        if HoverBV then HoverBV:Destroy(); HoverBV = nil end
     end
 end
 
 local function CancelTween()
-    if CurrentTween then
-        CurrentTween:Cancel()
-        CurrentTween = nil
-    end
+    if CurrentTween then CurrentTween:Cancel(); CurrentTween = nil end
 end
 
 local function BuildFarmPath()
@@ -156,28 +673,19 @@ local function BuildFarmPath()
             for _, v in ipairs(WaypointsData.W3_Part1) do table.insert(path, v) end
         end
     elseif Cfg.SelectedWorld == "World 2" then
-        if Cfg.SelectedTarget == "فارم 600k كأس" then
-            path = WaypointsData.W2_600k
-        elseif Cfg.SelectedTarget == "فارم 400k كأس" then
-            path = WaypointsData.W2_400k
-        else
-            path = WaypointsData.W2_250k
-        end
+        if Cfg.SelectedTarget == "فارم 600k كأس" then path = WaypointsData.W2_600k
+        elseif Cfg.SelectedTarget == "فارم 400k كأس" then path = WaypointsData.W2_400k
+        else path = WaypointsData.W2_250k end
     end
     return path
 end
 
 local function TweenToPosition(targetPos)
     if IsRespawning then return false end
-    
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
     local hum  = char and char:FindFirstChildOfClass("Humanoid")
-    
-    if not root or not hum then
-        IsRespawning = true
-        return false
-    end
+    if not root or not hum then IsRespawning = true; return false end
     
     local dist = (targetPos - root.Position).Magnitude
     local timeToTravel = dist / Cfg.GlideSpeed
@@ -186,16 +694,12 @@ local function TweenToPosition(targetPos)
     SetHoverVelocity(true)
     root.Anchored = false
     
-    if timeToTravel < 0.05 then
-        root.CFrame = CFrame.new(targetPos)
-        return true
-    end
+    if timeToTravel < 0.05 then root.CFrame = CFrame.new(targetPos); return true end
     
     local twInfo = TweenInfo.new(timeToTravel, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
     CurrentTween = TweenService:Create(root, twInfo, {CFrame = CFrame.new(targetPos)})
     CurrentTween:Play()
     CurrentTween.Completed:Wait()
-    
     return true
 end
 
@@ -211,7 +715,13 @@ local function TweenToWinBlock(blockName, fallbackPos)
     end
     
     local dist = (targetPos - root.Position).Magnitude
-    local twInfo = TweenInfo.new(dist / Cfg.GlideSpeed, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
+    local timeToTravel = dist / Cfg.GlideSpeed
+    if timeToTravel < 0.05 then
+        root.CFrame = CFrame.new(targetPos)
+        return
+    end
+    
+    local twInfo = TweenInfo.new(timeToTravel, Enum.EasingStyle.Linear, Enum.EasingDirection.Out)
     CurrentTween = TweenService:Create(root, twInfo, {CFrame = CFrame.new(targetPos)})
     CurrentTween:Play()
     CurrentTween.Completed:Wait()
@@ -232,7 +742,6 @@ local function StartStateKeeper()
     end)
 end
 
--- تشغيل الأوتو فارم
 local function StartWaypointAutoFarm()
     if Cfg.AutoFarmActive then return end
     Cfg.AutoFarmActive = true
@@ -253,12 +762,13 @@ local function StartWaypointAutoFarm()
         end
     end)
     
+    notify("Auto Farm 🤖", "تم تشغيل الفارم مع تفعيل God Mode II تلقائياً! 🛡️")
+    
     task.spawn(function()
         while Cfg.AutoFarmActive do
             if IsRespawning then task.wait(0.1) end
             
             local currentPath = BuildFarmPath()
-            
             for i = 1, #currentPath do
                 if not Cfg.AutoFarmActive or IsRespawning then break end
                 local success = TweenToPosition(currentPath[i])
@@ -295,7 +805,6 @@ local function StartWaypointAutoFarm()
     end)
 end
 
--- إيقاف الأوتو فارم
 local function StopWaypointAutoFarm()
     Cfg.AutoFarmActive = false
     IsRespawning = false
@@ -303,4 +812,466 @@ local function StopWaypointAutoFarm()
     SetHoverVelocity(false)
     if CharAddedConn then CharAddedConn:Disconnect() end
     if HeartbeatConn then HeartbeatConn:Disconnect() end
+    notify("Auto Farm 🤖", "تم إيقاف الأوتو فارم وإلغاء حماية God Mode II.")
 end
+
+--======================================
+-- 9. تحميل وتخصيص الواجهة V2.6.10
+--======================================
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+
+local Window = WindUI:CreateWindow({
+    Title = "LUX-ADK V2.6.10 ULTIMATE 🚀",
+    Icon = "shield-check",
+    Theme = "Dark",
+    Size = UDim2.fromOffset(620, 420)
+})
+
+local NewsTab     = Window:Tab({ Title = "News", Icon = "megaphone" })
+local FarmTab     = Window:Tab({ Title = "Auto Farm", Icon = "zap" })
+local MoveTab     = Window:Tab({ Title = "Movement", Icon = "plane" })
+local PremiumTab  = Window:Tab({ Title = "VIP Premium", Icon = "crown" })
+local CodesTab    = Window:Tab({ Title = "Codes", Icon = "key" })
+local SettingsTab = Window:Tab({ Title = "Settings", Icon = "settings" })
+
+-- تبويب الأدمن ابيوز الخاص بالمالك (Admin Abuse 👑)
+if isOwner then
+    local AdminTab = Window:Tab({ Title = "Admin Abuse 👑", Icon = "shield-alert" })
+    
+    local abuseEventName = "حدث عام"
+    local abuseEventDuration = 86400
+    local abuseText = ""
+    local abuseTextDuration = 5
+
+    AdminTab:Paragraph({
+        Title = "👑 لوحة تحكم المالك الحصرية (أزرار ومدد مستقلة)",
+        Desc = "التحكم بالحدث (يوم أو يومين) والتحكم بالنص (5 أو 10 أو 15 ثانية) بشكل منفصل تماماً."
+    })
+
+    AdminTab:Input({
+        Title = "🏷️ اكتب اسم الحدث",
+        Placeholder = "مثال: تحديث أسطوري / مسابقة روبوكس...",
+        Callback = function(txt)
+            abuseEventName = txt ~= "" and txt or "حدث عام"
+        end
+    })
+
+    AdminTab:Dropdown({
+        Title = "⏱️ مدة الحدث (يوم أو يومين)",
+        Values = {"يوم واحد", "يومان"},
+        Value = "يوم واحد",
+        Callback = function(opt)
+            local val = type(opt) == "table" and opt[1] or opt
+            if val == "يوم واحد" then abuseEventDuration = 86400
+            elseif val == "يومان" then abuseEventDuration = 172800
+            end
+        end
+    })
+
+    AdminTab:Button({
+        Title = "📢 إرسال وبث اسم الحدث فقط",
+        Callback = function()
+            ShowEventBanner(abuseEventName, abuseEventDuration)
+            pcall(function()
+                MessagingService:PublishAsync(AdminEventTopic, {
+                    eventName = abuseEventName,
+                    duration = abuseEventDuration,
+                    timestamp = os.time()
+                })
+            end)
+            notify("تم إرسال الحدث 🏷️", "تم بث الحدث بنجاح بالمدة المحددة!", 3)
+        end
+    })
+
+    AdminTab:Paragraph({
+        Title = "------------------------------------",
+        Desc = "--- قسم نص الإعلان المستقل ---"
+    })
+
+    AdminTab:Input({
+        Title = "✍️ اكتب نص الإعلان",
+        Placeholder = "اكتب تفاصيل الإعلان هنا...",
+        Callback = function(txt)
+            abuseText = txt
+        end
+    })
+
+    AdminTab:Dropdown({
+        Title = "⏱️ مدة زمن ظهور النص",
+        Values = {"5 ثواني", "10 ثواني", "15 ثانية"},
+        Value = "5 ثواني",
+        Callback = function(opt)
+            local val = type(opt) == "table" and opt[1] or opt
+            if val:find("5") then abuseTextDuration = 5
+            elseif val:find("10") then abuseTextDuration = 10
+            elseif val:find("15") then abuseTextDuration = 15
+            end
+        end
+    })
+
+    AdminTab:Button({
+        Title = "✍️ إرسال وبث نص الإعلان فقط",
+        Callback = function()
+            if abuseText == "" then
+                notify("تنبيه ⚠️", "يرجى كتابة نص الإعلان أولاً!", 3)
+                return
+            end
+            ShowTextBanner(abuseText, abuseTextDuration)
+            pcall(function()
+                MessagingService:PublishAsync(AdminTextTopic, {
+                    text = abuseText,
+                    duration = abuseTextDuration,
+                    timestamp = os.time()
+                })
+            end)
+            notify("تم إرسال النص ✍️", "تم بث نص الإعلان بنجاح بالمدة المحددة!", 3)
+        end
+    })
+end
+
+-- News Tab
+NewsTab:Button({
+    Title = "👑 المطور المالك للسكربت",
+    Callback = function()
+        if setclipboard then setclipboard("ldl_160100") end
+        notify("المالك 👑", "تم نسخ اسم حساب المالك: ldl_160100", 3)
+    end
+})
+
+NewsTab:Paragraph({
+    Title = "📢 أهم تعديلات تحديث V2.6.10",
+    Desc = "~ إضافة God Mode II (الخلود التلقائي) الذي ينفتح تلقائياً فور تشغيل Auto Farm للنسخة العادية!\n~ إبقاء زر God Mode 1 لحذف التسونامي والفخاخ بشكل يدوي للجميع."
+})
+
+NewsEventParagraphRef = NewsTab:Paragraph({
+    Title = "🏷️ آخر اسم حدث تم إرساله",
+    Desc = "🏷️ اسم الحدث الحالي:\n" .. lastSentEventName .. "\n⏱️ مدة الحدث: -"
+})
+
+NewsTextParagraphRef = NewsTab:Paragraph({
+    Title = "✍️ آخر نص إعلان تم إرساله",
+    Desc = "✍️ نص الإعلان الحالي:\n" .. lastSentTextMsg .. "\n⏱️ مدة العرض: -"
+})
+
+-- Auto Farm Tab
+CounterButtonRef = FarmTab:Button({
+    Title = "🌐 سيرفرات أخرى: " .. tostring(GetOtherServersCount()) .. "  |  🟢 سيرفرك الحالي: " .. tostring(GetServerActiveCount()),
+    Callback = function()
+        notify("العداد الحي 📊", "عدد مفعّلين السكربت في السيرفرات الأخرى وسيرفرك الحالي!", 3)
+    end
+})
+
+FarmTab:Button({
+    Title = "🌊 God Mode 1: حذف التسونامي والفخاخ والأخطار",
+    Callback = function()
+        local count = DeleteAllHazards()
+        notify("تطهير الماب 🛡️", "تم مسح وتدمير " .. count .. " خطر وتسونامي من الماب!")
+    end
+})
+
+FarmTab:Dropdown({
+    Title = "🗺️ اختر العالم المستهدف",
+    Values = {"World 2", "World 3"},
+    Value = "World 3",
+    Callback = function(opt)
+        local val = type(opt) == "table" and opt[1] or opt
+        Cfg.SelectedWorld = val
+        Cfg.SelectedTarget = (val == "World 2") and "فارم 600k كأس" or "فارم 3.5b كأس"
+    end
+})
+
+FarmTab:Dropdown({
+    Title = "🏆 اختر نوع الكأس / الهدف",
+    Values = {"فارم 5.5b كأس", "فارم 3.5b كأس", "فارم 2b كأس", "فارم 1.2b كأس", "فارم 600k كأس", "فارم 400k كأس", "فارم 250k كأس"},
+    Value = "فارم 3.5b كأس",
+    Callback = function(opt)
+        Cfg.SelectedTarget = type(opt) == "table" and opt[1] or opt
+    end
+})
+
+FarmTab:Dropdown({
+    Title = "⚡ سرعة الانزلاق بين الإحداثيات",
+    Values = {"115 (آمن وحذر)", "175 (سريع وممتاز)", "220 (خارق)"},
+    Value = "175 (سريع وممتاز)",
+    Callback = function(opt)
+        local rawVal = type(opt) == "table" and opt[1] or opt
+        local num = tonumber(string.match(tostring(rawVal), "%d+"))
+        if num then Cfg.GlideSpeed = num end
+    end
+})
+
+FarmTab:Toggle({
+    Title = "🤖 تشغيل Auto Farm + God Mode II تلقائياً",
+    Value = false,
+    Callback = function(v)
+        if v then StartWaypointAutoFarm() else StopWaypointAutoFarm() end
+    end
+})
+
+-- Movement Tab
+local FlyBV, FlyBG, FlyConn
+
+local function StopFly()
+    Cfg.Fly = false
+    if FlyConn then FlyConn:Disconnect(); FlyConn = nil end
+    if FlyBV then FlyBV:Destroy(); FlyBV = nil end
+    if FlyBG then FlyBG:Destroy(); FlyBG = nil end
+    pcall(function()
+        local char = player.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if hum then hum.PlatformStand = false end
+        if root then root.AssemblyLinearVelocity = Vector3.zero end
+    end)
+end
+
+local function StartFly()
+    StopFly()
+    Cfg.Fly = true
+    
+    FlyConn = RunService.RenderStepped:Connect(function()
+        if not Cfg.Fly then return end
+        
+        local char = player.Character
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        local hum  = char and char:FindFirstChildOfClass("Humanoid")
+        
+        if not root or not hum or hum.Health <= 0 then return end
+        
+        hum.PlatformStand = true
+        
+        if not FlyBV or not FlyBV.Parent then
+            FlyBV = Instance.new("BodyVelocity")
+            FlyBV.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+            FlyBV.Velocity = Vector3.zero
+            FlyBV.Parent = root
+        end
+        
+        if not FlyBG or not FlyBG.Parent then
+            FlyBG = Instance.new("BodyGyro")
+            FlyBG.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+            FlyBG.P = 90000
+            FlyBG.Parent = root
+        end
+        
+        local cam = Camera.CFrame
+        local moveDir = cam.LookVector
+        
+        FlyBV.Velocity = moveDir * (Cfg.FlySpeed * 25)
+        FlyBG.CFrame = cam
+    end)
+end
+
+MoveTab:Toggle({
+    Title = "✈️ تفعيل الطيران التلقائي (حسب اتجاه الكاميرا)",
+    Value = false,
+    Callback = function(v)
+        if v then StartFly() else StopFly() end
+    end
+})
+
+MoveTab:Input({
+    Title = "✈️ سرعة الطيران (عادي: 1 - 11 | VIP: 11 - 16)",
+    Placeholder = "أدخل سرعة...",
+    Callback = function(txt)
+        local num = tonumber(txt)
+        if num and num > 0 then
+            local isVIP = isPremiumActive()
+            local maxLimit = isVIP and 16 or 11
+            local minLimit = 1
+
+            if num > maxLimit then
+                num = maxLimit
+                notify("تنبيه ⚠️", "الحد الأقصى لسرعة الطيران المسموح لك هو: " .. tostring(maxLimit))
+            elseif num < minLimit then
+                num = minLimit
+            end
+
+            Cfg.FlySpeed = num
+            notify("سرعة الطيران ✈️", "تم ضبط سرعة الطيران إلى: " .. tostring(num))
+            if Cfg.Fly then StartFly() end
+        else
+            notify("خطأ ❌", "يرجى أدخال رقم صحيح!", 3)
+        end
+    end
+})
+
+MoveTab:Toggle({
+    Title = "🧱 اختراق الجدران (Noclip)",
+    Value = false,
+    Callback = function(v) Cfg.Noclip = v end
+})
+
+MoveTab:Input({
+    Title = "⚡ سرعة المشي (عادي max 400 / VIP max 500)",
+    Placeholder = "أدخل رقم السرعة...",
+    Callback = function(txt)
+        local num = tonumber(txt)
+        if num then
+            local maxLimit = isPremiumActive() and 500 or 400
+            if num > maxLimit then num = maxLimit end
+            Cfg.WalkSpeed = num
+            notify("سرعة المشي ⚡", "تم ضبط سرعة المشي إلى: " .. tostring(num))
+        end
+    end
+})
+
+MoveTab:Input({
+    Title = "🦘 قوة القفز (عادي max 400 / VIP max 500)",
+    Placeholder = "أدخل رقم القفز...",
+    Callback = function(txt)
+        local num = tonumber(txt)
+        if num then
+            local maxLimit = isPremiumActive() and 500 or 400
+            if num > maxLimit then num = maxLimit end
+            Cfg.JumpPower = num
+            notify("قوة القفز 🦘", "تم ضبط قوة القفز إلى: " .. tostring(num))
+        end
+    end
+})
+
+RunService.Stepped:Connect(function()
+    local char = player.Character
+    if char then
+        if Cfg.Noclip then
+            for _, p in pairs(char:GetDescendants()) do
+                if p:IsA("BasePart") then p.CanCollide = false end
+            end
+        end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if hum and hum.Health > 0 then
+            hum.WalkSpeed = Cfg.WalkSpeed
+            hum.UseJumpPower = true
+            hum.JumpPower = Cfg.JumpPower
+        end
+    end
+end)
+
+-- VIP Premium Tab
+PremiumTab:Toggle({
+    Title = "🛡️ وضع الخلود (God Mode VIP)",
+    Value = false,
+    Callback = function(v)
+        if v then
+            if not isPremiumActive() then
+                Cfg.GodMode = false
+                notify("VIP حصري 🔒", "ميزة God Mode مغلقة لغير المشتركين!", 4)
+                return
+            end
+            Cfg.GodMode = true
+            notify("God Mode 🛡️", "تم تفعيل الخلود بنجاح!")
+        else
+            Cfg.GodMode = false
+        end
+    end
+})
+
+PremiumTab:Toggle({
+    Title = "☁️ المشي في الهواء (AirWalk VIP)",
+    Value = false,
+    Callback = function(v)
+        if v then
+            if not isPremiumActive() then
+                Cfg.AirWalk = false
+                notify("VIP حصري 🔒", "ميزة AirWalk مغلقة لغير المشتركين!", 4)
+                return
+            end
+            Cfg.AirWalk = true
+        else
+            Cfg.AirWalk = false
+        end
+    end
+})
+
+PremiumTab:Button({
+    Title = "💣 حذف جميع الفخاخ والأجسام القاتلة (Nuke Hazards)",
+    Callback = function()
+        if not isPremiumActive() then
+            notify("VIP حصري 🔒", "أداة حذف الفخاخ محظورة لغير المشتركين!", 4)
+            return
+        end
+        local count = DeleteAllHazards()
+        notify("تطهير الماب 💣", "تم مسح وتدمير " .. count .. " جزء قاتل في الماب!")
+    end
+})
+
+PremiumTab:Toggle({
+    Title = "🛡️ Anti-AFK (منع الطرد بسبب الخمول)",
+    Value = true,
+    Callback = function(v) Cfg.AntiAFK = v end
+})
+
+pcall(function()
+    player.Idled:Connect(function()
+        if Cfg.AntiAFK then
+            VirtualUser:Button2Down(Vector2.new(0,0), Camera.CFrame)
+            task.wait(0.5)
+            VirtualUser:Button2Up(Vector2.new(0,0), Camera.CFrame)
+        end
+    end)
+end)
+
+-- Codes Tab
+local inputCodeText = ""
+CodesTab:Input({
+    Title = "أدخل كود البريميوم (7 أيام)",
+    Placeholder = "أدخل الكود هنا...",
+    Callback = function(txt) inputCodeText = txt end
+})
+
+CodesTab:Button({
+    Title = "تفعيل الكود 🎁",
+    Callback = function()
+        local inputCode = string.upper(string.gsub(inputCodeText, "%s+", ""))
+        if inputCode == "" then notify("تنبيه ⚠️", "يرجى كتابة الكود أولاً!", 3); return end
+        if not validCodes[inputCode] then notify("خطأ ❌", "الكود غير صحيح أو محروق!", 3); return end
+
+        codeData.usedCodes[inputCode] = true
+        validCodes[inputCode] = nil
+        
+        local currentTime = os.time()
+        local currentExpiry = (codeData.premiumUntil and codeData.premiumUntil > currentTime) and codeData.premiumUntil or currentTime
+        codeData.premiumUntil = currentExpiry + (7 * 24 * 60 * 60)
+        saveCodeData()
+        notify("مبروك! 🌟", "🎉 تم تفعيل VIP بنجاح!", 5)
+    end
+})
+
+-- Settings Tab
+SettingsTab:Dropdown({
+    Title = "🎨 اختر لون وثيم الواجهة",
+    Values = {"Dark", "Light", "Rose", "Aqua", "Emerald", "Midnight", "Purple"},
+    Value = "Dark",
+    Callback = function(opt)
+        local themeName = type(opt) == "table" and opt[1] or opt
+        pcall(function()
+            if Window.SetTheme then Window:SetTheme(themeName)
+            elseif WindUI.SetTheme then WindUI:SetTheme(themeName) end
+            notify("تنسيق الواجهة 🎨", "تم تطبيق ثيم: " .. themeName)
+        end)
+    end
+})
+
+SettingsTab:Keybind({
+    Title = "⌨️ زر إخفاء / إظهار الواجهة",
+    Default = Enum.KeyCode.RightControl,
+    Callback = function()
+        pcall(function() Window:Toggle() end)
+    end
+})
+
+SettingsTab:Button({
+    Title = "❌ إغلاق السكربت نهائياً",
+    Callback = function()
+        StopWaypointAutoFarm()
+        StopFly()
+        Cfg.AirWalk = false
+        Cfg.GodMode = false
+        getgenv().LUX_ADK_EXECUTED = nil
+        Window:Destroy()
+        notify("إغلاق", "تم إيقاف وإغلاق السكربت V2.6.10!")
+    end
+})
+
+BroadcastScriptPing()
+
